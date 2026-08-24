@@ -9,15 +9,23 @@ description = "Production-style skeleton for DPO/ORPO preference alignment lab"
 requires-python = ">=3.10"
 dependencies = ["pydantic>=2.7", "typer>=0.12", "rich>=13.7", "pyyaml>=6.0", "numpy>=1.26"]
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5", "mypy>=1.10", "openai>=1.30"]
+dev = ["pytest>=8.0", "ruff>=0.5", "mypy>=1.10", "openai>=1.30", "types-PyYAML>=6.0"]
 train = ["torch>=2.2", "transformers>=4.44", "datasets>=2.20", "trl>=0.12", "peft>=0.12"]
 [project.scripts]
 pref-lab = "preference_lab.cli:app"
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+# `typer.Option(...)` in a parameter default is Typer's required idiom, not the
+# mutable-default bug B008 exists to catch.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
 [tool.mypy]
-python_version = "3.10"
+# The package still supports 3.10 (see requires-python), but numpy>=2.5 ships
+# stubs written with PEP 695 `type` statements, which mypy only parses when the
+# target version is 3.12 or newer.
+python_version = "3.12"
 strict = true
 mypy_path = "src"
 

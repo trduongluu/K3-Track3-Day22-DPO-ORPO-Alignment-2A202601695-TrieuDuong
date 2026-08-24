@@ -55,9 +55,44 @@ tests/                  Unit tests for student work
 
 ## Production checklist
 
-- [ ] Dataset schema validated.
-- [ ] Train/eval split by prompt, not by row.
-- [ ] Config committed; generated artifacts ignored.
-- [ ] Metrics saved as JSON.
-- [ ] Safety regression prompts run before/after training.
-- [ ] Data card updated.
+- [x] Dataset schema validated. — `PreferenceExample` rejects empty fields, identical
+      `chosen`/`rejected` (case- and whitespace-insensitive) and near-duplicates; `load_jsonl`
+      adds line-numbered errors, duplicate-prompt detection and a PII guardrail.
+- [x] Train/eval split by prompt, not by row. — `split_by_prompt` groups by normalized prompt,
+      shuffles prompt keys with `random.Random(seed)`, then cuts on a group boundary. Tests assert
+      both `len(train) + len(val) == len(examples)` and an empty prompt intersection.
+- [x] Config committed; generated artifacts ignored. — `configs/local.yaml` holds every knob;
+      `.gitignore` keeps `outputs/` out of version control, so measured values are quoted in
+      `docs/REPORT_TEMPLATE.md` instead.
+- [x] Metrics saved as JSON. — `outputs/metrics.json`, plus `checkpoint.json`,
+      `training_metrics.json` and `regression_report.json`.
+- [x] Safety regression prompts run before/after training. — `python scripts/run_regression.py`
+      scores the four scenarios with the un-aligned reference vs. the aligned policy: 3/4 prefer
+      the safe answer. See the Safety section of the report for why the passes are weaker than
+      they look.
+- [x] Data card updated. — `docs/data_card_template.md`, including the measured length bias.
+
+## Results
+
+`make test` 85 passed · `make lint` clean · `make typecheck` clean (mypy `strict`) · no
+`NotImplementedError` left in `src/`.
+
+| Metric | Value |
+|---|---|
+| Pairwise accuracy (6 held-out prompts) | 83.33% |
+| DPO loss | 0.5209 (vs. `log 2 = 0.6931` for an uninformative policy) |
+| "Always prefer the longer answer" baseline | 100% — the corpus's built-in length bias |
+| Safety regression | 3/4 scenarios prefer the safe answer |
+
+Both objectives are implemented. Full write-up, including three observed failure modes and a
+justification for every change made outside a `TODO(student)` block, is in
+[docs/REPORT_TEMPLATE.md](docs/REPORT_TEMPLATE.md).
+
+## Commands
+
+```bash
+pref-lab validate data/sample_preferences.jsonl   # -> Loaded 24 preference examples
+pref-lab evaluate --config configs/local.yaml     # -> outputs/metrics.json
+pref-lab train    --config configs/local.yaml     # -> outputs/checkpoint.json (CPU mock trainer)
+python scripts/run_regression.py                  # -> outputs/regression_report.json
+```

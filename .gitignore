@@ -9,3 +9,7 @@ wandb/
 *.safetensors
 *.bin
 .env
+
+.omc/
+.claude/
+*.egg-info/

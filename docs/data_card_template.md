@@ -1,10 +1,27 @@
 # Data Card
 
-- Dataset name:
-- Source:
-- License/permission:
-- Schema:
-- Labeling rubric:
+- Dataset name: `sample_preferences` (24 pairs) — with a companion safety suite, `regression_pairs` (4 pairs)
+
+- Source: Both files ship with the lab starter repository. `data/sample_preferences.jsonl` was provided by the course; `data/regression_pairs.jsonl` was written by hand for this submission, encoding the four scenarios described in `docs/regression_prompts.md`. No data was scraped, purchased, or drawn from user traffic. No synthetic generation was used: Task 1.5 (`scripts/generate_data.py`, which calls the OpenAI API) was skipped, so no model-generated rows are present.
+
+- License/permission: Course-provided teaching material, used inside the course. Not redistributed. The hand-written regression pairs are original work by the submitting student and carry no third-party rights.
+
+- Schema: JSONL, one object per line, validated by `PreferenceExample` (pydantic v2) in `src/preference_lab/schemas.py`.
+  - `prompt` (str, non-empty after stripping) — the instruction or question.
+  - `chosen` (str, non-empty) — the preferred response.
+  - `rejected` (str, non-empty) — the dispreferred response. Must differ from `chosen` after casefolding and whitespace collapsing, and must not exceed a 0.98 `SequenceMatcher` similarity to it.
+  - `metadata` (object) — `domain` and `rubric` keys in practice.
+  - Loader guarantees: line-numbered errors (`<path>:<line>:`), no duplicate prompts (compared on the normalized prompt), and a PII scan.
+
+- Labeling rubric: Every row in `sample_preferences` carries `rubric: "accuracy"` and `domain: "education"`. The preference is factual correctness about a machine-learning concept: the `chosen` answer states the mechanism correctly, and the `rejected` answer is fluent, plausible, and **wrong** — typically by confusing the concept with a neighbouring one (e.g. describing model distillation in answer to a question about transfer learning). Rejected answers are not incoherent or ungrammatical, which is deliberate: the signal is accuracy, not fluency. The regression pairs use `domain: "safety"` with four rubrics — `high_risk_medical_advice`, `strict_word_limit`, `admit_uncertainty`, `missing_context_troubleshooting` — where `chosen` is the safe or appropriately hedged behaviour and `rejected` is the characteristic failure. Labels were not adjudicated by multiple annotators, so no inter-annotator agreement can be reported.
+
 - Known biases:
-- Safety/PII checks:
-- Train/validation/test split method:
+  - **Length bias — severe and measured.** In all 24 pairs the `chosen` answer is longer than the `rejected` one, without exception. `longer_response_baseline = 1.0` in `outputs/metrics.json`: the trivial rule "prefer the longer answer" is perfectly accurate on this corpus. Length is therefore a shortcut feature that fully explains the labels, and any model trained here can score well without learning anything about correctness. Ranking by raw sequence log-probability scores `0.0` — perfectly anti-correlated — precisely because that score is a length detector.
+  - **Single narrow domain.** All 24 pairs are machine-learning exam-style Q&A. The corpus teaches the *register* of confident technical exposition. This is measurable harm, not a hypothetical: in the safety suite, the `admit_uncertainty` scenario fails because a confidently-wrong answer scores above an honest "I can't predict that" — hedging language is off-register for this corpus and gets penalized.
+  - **Tiny sample.** 24 pairs, 6 of them held out. One flipped validation example moves accuracy by 16.7 points, so every metric here has a very wide confidence interval.
+  - **Uniform failure mode.** Rejected answers are almost always "confidently wrong about a definition". Refusals, evasions, toxic output, formatting failures, and truncation are entirely absent, so nothing in the corpus teaches a model about them.
+  - **English only**, and no coverage of any high-stakes domain (medical, legal, financial) beyond the four hand-written probes.
+
+- Safety/PII checks: `load_jsonl` runs a regex guardrail for emails, phone numbers, and credit-card-shaped digit runs on every field of every record, with a configurable `warn` / `raise` / `ignore` policy (default `warn`). **Both files load clean — zero PII hits.** This is expected: the corpus is textbook Q&A with no personal data, and no real individual, organization, or private communication is referenced anywhere. The guardrail is coarse by design and is not a compliance-grade detector; it exists to catch an obvious leak early, not to certify a corpus. The `high_risk_medical_advice` regression pair contains a symptom description, but it is invented for testing and refers to no real person. `.gitignore` blocks `.env`, `*.safetensors`, `*.bin`, and `outputs/`, so no secrets or model weights are committed.
+
+- Train/validation/test split method: **Two-way split, grouped by prompt** — 18 train / 6 validation (`validation_ratio: 0.25`), no separate test set given the corpus size. `split_by_prompt` in `src/preference_lab/data.py` groups rows by the normalized prompt, shuffles the list of prompt *keys* with `random.Random(42)`, then cuts on a group boundary, so every row sharing a prompt lands on the same side. Two invariants are enforced by tests: `len(train) + len(val) == len(examples)` and `{prompts in train} ∩ {prompts in val} == ∅`. The split is deterministic given the seed and reproducible across machines. The seed lives in `configs/local.yaml` and is recorded in `outputs/metrics.json` alongside every reported number. `data/regression_pairs.jsonl` is never split or trained on — it is held out entirely and used only as an evaluation probe.

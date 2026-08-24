@@ -8,5 +8,10 @@ training:
   lambda_orpo: 0.1
   max_length: 512
   batch_size: 2
+  epochs: 300             # mock-trainer gradient steps
+  learning_rate: 1.0      # step size for the linear reranker
 evaluation:
   regression_prompts: docs/regression_prompts.md
+  validation_ratio: 0.25   # fraction of prompt groups held out
+  tie_credit: 0.5          # credit awarded when two scores are exactly equal
+  smoothing_alpha: 1.0     # Laplace smoothing for the unigram scorer
